@@ -1,13 +1,17 @@
 #include<stdio.h>
 #include<stdlib.h>
+#include<string.h>
 #include<math.h>
 #include<gmp.h>
 #define N 300000
 #define PI 3.14159265
 #define PREC 1024
-mpf_t d[1000],roots[N],ders[N],erro;
-int p[3]={1,0,-1},q[2]={0,-2};
-long int r,n;
+mpf_t d[1000],roots[N],ders[N],w[N],erro,p0,p1,p2,dp0,dp1,dp2;
+int p[3],q[2];
+int sign_p[3],sign_q[2];
+int a[N],b[N],c[N],dd[N];
+char* flag;
+long int r,n,nn;
 
 void taylor2(mpf_t *dux_h,mpf_t h,mpf_t d[],long int m);
 void taylor1(mpf_t *ux_h,mpf_t d[],long int m);
@@ -16,13 +20,17 @@ double f(double theta,double x);
 void find_first_root(mpf_t xe, mpf_t uxe,long int m);
 void m_ders(mpf_t point,mpf_t value_at_point,mpf_t der_at_point,long int m,mpf_t h);
 void newton(mpf_t point,mpf_t value_at_prepoint,mpf_t h,mpf_t erro,long int index,long int m);
+void iteration_P(mpf_t xk,int m);
+void coefs_Legendre();
+void coefs_Hermite();
+void coefs_Laguerre();
 
-int main(int argc, char *argv)
+int main(int argc, char **argv)
 {
 	mpf_set_default_prec(PREC);	
 	
         FILE *fp,*fq1,*fq2;
-	mpf_t value_of_zero1,value_of_zero2,der_of_zero1,der_of_zero2,temp,p0,p1,p2,w[N],zero;
+	mpf_t value_of_zero1,value_of_zero2,der_of_zero1,der_of_zero2,temp,zero;
 
 	mpf_init(value_of_zero1);
 	mpf_init(value_of_zero2);
@@ -32,10 +40,14 @@ int main(int argc, char *argv)
 	mpf_init(p0);
 	mpf_init(p1);
 	mpf_init(p2);
+        mpf_init(dp0);
+	mpf_init(dp1);
+	mpf_init(dp2);
         mpf_init(erro);
         mpf_init(zero);
         mpf_set_ui(zero,0);
-	long int i,j,m,t,nn;
+	long int i,j,m,t;
+        
 	for(i=0;i<1000;i++)
 	{
 		mpf_init(d[i]);
@@ -53,55 +65,96 @@ int main(int argc, char *argv)
         fq2=fopen("coefs.txt","w");
 	fscanf(fp,"%ld",&n);
 	gmp_fscanf(fp,"%Ff",erro);
-	r=n*(n+1);
-	m=120;
-	mpf_set_ui(value_of_zero1,1);
-	mpf_set_ui(value_of_zero2,0);
-	mpf_set_ui(der_of_zero1,0);
-	mpf_set_ui(der_of_zero2,1);
-	if (n%2==0)
-	{
-		for(i=0;i<n-1;i=i+2)
-		{
-			mpf_mul_ui(value_of_zero1,value_of_zero1,i+1);
-	    	        mpf_div_ui(value_of_zero1,value_of_zero1,i+2);
-			mpf_neg(value_of_zero1,value_of_zero1); 
-		}
-	}
-	else
-	{
-		for(i=1;i<n-1;i=i+2)
-		{
-			mpf_mul_ui(value_of_zero1,value_of_zero1,i);
-			mpf_div_ui(value_of_zero1,value_of_zero1,i+1);
-			mpf_neg(value_of_zero1,value_of_zero1);
-			mpf_set(der_of_zero2,value_of_zero1);
-			mpf_mul_ui(der_of_zero2,der_of_zero2,2*i+3);
-			mpf_div_ui(der_of_zero2,der_of_zero2,i+2);
-			mpf_set(temp,der_of_zero2);
-			mpf_mul_ui(temp,temp,i+1);
-			mpf_div_ui(temp,temp,i+2);
-			mpf_sub(der_of_zero2,der_of_zero2,temp);
-		}
-	}
-       
-	
+        flag = argv[1];   /*命令行参数*/
+        if (strcmp(flag,"Legendre")==0)
+           {
+               p[0] = 1;  sign_p[0] = 1;
+               p[1] = 0;  sign_p[1] = 1;
+               p[2] = 1;  sign_p[2] = -1;
+               q[0] = 0;  sign_q[0] = 1;
+               q[1] = 2;  sign_q[1] = -1;
+               r=n*(n+1);
+               for(i=0;i<=n;i++)
+                   {
+                       a[i] = i+1;
+                       b[i] = 0;
+                       c[i] = 2*i+1;
+                       dd[i] = i;
+                   }
+           }
+       else if(strcmp(flag,"Hermite")==0)
+           {
+               p[0] = 1;  sign_p[0] = 1;
+               p[1] = 0;  sign_p[1] = 1;
+               p[2] = 0;  sign_p[2] = 1;
+               q[0] = 0;  sign_q[0] = 1;
+               q[1] = 2;  sign_q[1] = -1;
+               r=2*n;
+               for(i=0;i<=n;i++)
+                   {
+                       a[i] = 1;
+                       b[i] = 0;
+                       c[i] = 2;
+                       dd[i] = 2*i;
+                   }
+               
+           }
+       else if(strcmp(flag,"Laguerre")==0)
+           {
+               p[0] = 0; sign_p[0] = 1;
+               p[1] = 1; sign_p[1] = 1;
+               p[2] = 0; sign_p[2] = 1;
+               q[0] = 1; sign_q[0] = 1;
+               q[1] = 1; sign_q[1] = -1;
+               r=n;
+               for(i=0;i<=n;i++)
+                   {
+                       a[i] = i+1;
+                       b[i] = 2*i+1;
+                       c[i] = 1; /*符号运算过程中体现*/
+                       dd[i] = i;
+                   }
+           }
+	m=30;
+
+    if ((strcmp(flag,"Legendre")==0)||(strcmp(flag,"Hermite")==0))
+      {
+        mpf_set_ui(temp,0);
+        iteration_P(temp,n);
 	if(n%2==0)
 	{
                 mpf_set_ui(roots[0],0);
 		mpf_set_ui(ders[0],0);
-		mpf_set_ui(temp,0);
-		find_first_root(temp,value_of_zero1,m);
+                /*gmp_printf("%Ff\n",p2);*/ 
+		find_first_root(temp,p2,m);
 		nn=n/2-1;
 	}
 	else
 	{
 		mpf_set_ui(roots[1],0);
-		mpf_set(ders[1],der_of_zero2);
+		mpf_set(ders[1],dp2);
 		nn=n/2;
 	}
-
-
+      }
+      if(strcmp(flag,"Laguerre")==0)
+      {
+          mpf_set_ui(temp,0);
+          iteration_P(temp,n);
+          if(n%2==0)
+	  {
+                mpf_set_ui(roots[0],0);
+		mpf_set(ders[0],dp2);
+		find_first_root(roots[0],p2,m);
+		nn=n/2-1;
+	   }
+	  else
+	  {
+		mpf_set_ui(roots[0],0);
+		mpf_set(ders[0],dp2);
+		find_first_root(roots[0],p2,m);
+		nn=n/2;
+	  }
+      }
 	for(i=1;i<=nn;i++)
 	{
 		mpf_set_d(roots[i+1],RK(PI/2,mpf_get_d(roots[i]),0));
@@ -113,28 +166,13 @@ int main(int argc, char *argv)
 	for(i=1;i<=nn+1;i++)
 	{
 		gmp_fprintf(fq1,"%.315Ff\n",roots[i]);
-		mpf_set_ui(p0,1);
-		mpf_set(p1,roots[i]);
-		for(j=2;j<n;j++)
-		{
-			mpf_mul_ui(p2,roots[i],2*j-1);
-			mpf_mul(p2,p2,p1);
-			mpf_mul_ui(temp,p0,j-1);
-			mpf_sub(p2,p2,temp);
-			mpf_div_ui(p2,p2,j);
-			mpf_set(p0,p1);
-			mpf_set(p1,p2);
-		}
-		mpf_mul_ui(p2,p2,n);
-		mpf_div_ui(p2,p2,n+1);
-		mpf_mul(w[i],roots[i],roots[i]);
-		mpf_ui_sub(w[i],1,w[i]);
-		mpf_mul_ui(w[i],w[i],2);
-		mpf_div_ui(w[i],w[i],n+1);
-		mpf_div_ui(w[i],w[i],n+1);
-		mpf_div(w[i],w[i],p2);
-		mpf_div(w[i],w[i],p2);
 	}
+
+        /*求系数*/
+        if(strcmp(flag,"Legendre")==0) coefs_Legendre();
+        if(strcmp(flag,"Hermite")==0) coefs_Hermite();
+        if(strcmp(flag,"Laguerre")==0) coefs_Laguerre();
+
 	for(i=1;i<=nn+1;i++)
 	{
 		gmp_fprintf(fq2,"%.315Ff\n",w[i]);
@@ -158,12 +196,108 @@ int main(int argc, char *argv)
 	mpf_clear(p0);
 	mpf_clear(p1);
 	mpf_clear(p2);
+        mpf_clear(dp0);
+	mpf_clear(dp1);
+	mpf_clear(dp2);
 	fclose(fp);
 	fclose(fq1);
         fclose(fq2);
 	return 0;
 }
+void iteration_P(mpf_t xk,int m)
+{
+        int i,j;
+        mpf_t temp;
+        mpf_init(temp);
+        mpf_set_ui(p2,0);
+        mpf_set_ui(dp2,0);
+        if(strcmp(flag,"Legendre")==0)
+          {
+            mpf_set_ui(p0,1); mpf_set_ui(dp0,0);
+            mpf_set(p1,xk); mpf_set_ui(dp1,1);
+          }
+        if(strcmp(flag,"Hermite")==0)
+          {
+            mpf_set_ui(p0,1); mpf_set_ui(dp0,0);
+            mpf_mul_ui(p1,xk,2); mpf_set_ui(dp1,2);
+          }
+        if(strcmp(flag,"Laguerre")==0)
+          {
+            mpf_set_ui(p0,1); mpf_set_ui(dp0,0);
+            mpf_ui_sub(p1,1,xk); mpf_set_si(dp1,-1);
+          }
+        for(i=1;i<m;i++)
+          {
+            mpf_mul_ui(temp,xk,c[i]);
+            if (strcmp(flag,"Laguerre")==0) mpf_neg(temp,temp);
+            mpf_add_ui(temp,temp,b[i]);
+            mpf_mul(p2,temp,p1);
+            mpf_mul_ui(temp,p0,dd[i]); 
+            mpf_sub(p2,p2,temp);
+            mpf_div_ui(p2,p2,a[i]);
 
+            mpf_mul_ui(temp,xk,c[i]);
+            if (strcmp(flag,"Laguerre")==0) mpf_neg(temp,temp);
+            mpf_add_ui(temp,temp,b[i]);
+            mpf_mul(dp2,temp,dp1);
+            mpf_mul_ui(temp,dp0,dd[i]); 
+            mpf_sub(dp2,dp2,temp);
+            mpf_mul_ui(temp,p1,c[i]);
+            if (strcmp(flag,"Laguerre")==0) mpf_neg(temp,temp);
+            mpf_add(dp2,dp2,temp);
+            mpf_div_ui(dp2,dp2,a[i]);
+
+            mpf_set(p0,p1);
+	    mpf_set(p1,p2);
+            mpf_set(dp0,dp1);
+            mpf_set(dp1,dp2);
+          }
+       mpf_clear(temp);
+}
+
+void coefs_Legendre()
+{ 
+    int i;
+    for(i=1;i<=nn+1;i++)
+       {
+          iteration_P(roots[i],n);
+          mpf_mul(w[i],roots[i],roots[i]);
+	  mpf_ui_sub(w[i],1,w[i]);
+          mpf_mul(w[i],w[i],dp2); 
+          mpf_mul(w[i],w[i],dp2);
+          mpf_ui_div(w[i],2,w[i]);
+       }
+}
+void coefs_Hermite()
+{
+    int i;
+    double t;
+    mpf_t temp;
+    mpf_init(temp);
+    t = 1;
+    for (i=1;i<=n;i++);
+        t = t*2*i;
+    t = t*2*sqrt(PI);
+    mpf_set_d(temp,t);
+    for(i=1;i<=nn+1;i++)
+       {
+          iteration_P(roots[i],n);
+          mpf_mul(w[i],dp2,dp2); 
+          mpf_div(w[i],temp,w[i]); 
+       }
+    mpf_clear(temp);
+}
+void coefs_Laguerre()
+{
+    int i;
+    for(i=1;i<=nn+1;i++)
+       {
+          iteration_P(roots[i],n);
+          mpf_mul(w[i],dp2,dp2); 
+          mpf_mul(w[i],w[i],roots[i]);
+          mpf_ui_div(w[i],1,w[i]); 
+       }
+}
 void taylor2(mpf_t *p,mpf_t h,mpf_t d[],long int m)
 {
 	long int i;
@@ -220,14 +354,14 @@ double RK(double theta, double value_at_theta,long int emm)
 
 double f(double theta,double x)
 {
-	double z,z1,z2;
-	z1=n;
-	z=sqrt(z1*(z1+1)/(1-x*x))-x*sin(2*theta)/(2*(1-x*x));
+	double z,z1;
+        z1 = r;
+	z=sqrt(z1/(p[0]*sign_p[0]+p[1]*sign_p[1]*x+p[2]*sign_p[2]*x*x))+(-(p[1]*sign_p[1]+2*p[2]*sign_p[2]*x)+2*(q[0]*sign_q[0]+q[1]*sign_q[1]*x))*sin(2*theta)/(4*(p[0]*sign_p[0]+p[1]*sign_p[1]*x+p[2]*sign_p[2]*x*x));
 	z=-1.0/z;
 	return z;
 }
 
-void find_first_root(mpf_t xe, mpf_t uxe,long int m)
+void find_first_root(mpf_t xe, mpf_t uxe,long int m) 
 {
 	double x,xed;
 	mpf_t x1,temp;
@@ -242,36 +376,58 @@ void find_first_root(mpf_t xe, mpf_t uxe,long int m)
 	mpf_clear(temp);
 }
 
-void m_ders(mpf_t point,mpf_t value_at_point,mpf_t der_at_point,long int m,mpf_t h)
+void m_ders(mpf_t point,mpf_t value_at_point,mpf_t der_at_point,long int m,mpf_t h)   
 {
 	long int k,t;
-	mpf_t temp;
-	mpf_init(temp);
+	mpf_t temp1,temp2;
+	mpf_init(temp1);
+        mpf_init(temp2);
 	mpf_set(d[0],value_at_point);
 	mpf_mul(d[1],der_at_point,h);
 	if(m<=n) t=m-2; else t=n-2;
 	for(k=0;k<=t;k++)
 	{
-	    mpf_set_ui(d[k+2],2);
-	    mpf_mul(d[k+2],d[k+2],h);
-	    mpf_mul_ui(d[k+2],d[k+2],k+1);
-	    mpf_mul(d[k+2],d[k+2],point);
-	    mpf_div_ui(d[k+2],d[k+2],k+2);
-	    mpf_mul(d[k+2],d[k+2],d[k+1]);
-	    mpf_mul(temp,h,h);
-	    mpf_mul_ui(temp,temp,n-k);
-	    mpf_neg(temp,temp);
-	    mpf_mul_ui(temp,temp,k+n+1);
-	    mpf_div_ui(temp,temp,k+1);
-	    mpf_div_ui(temp,temp,k+2);
-	    mpf_mul(temp,temp,d[k]);
-	    mpf_add(d[k+2],d[k+2],temp);
-	    
-	    mpf_mul(temp,point,point);
-	    mpf_ui_sub(temp,1,temp);
-	    mpf_div(d[k+2],d[k+2],temp);
+            mpf_mul_ui(temp1,point,2*p[2]);
+            if (sign_p[2]==-1)
+                   mpf_neg(temp1,temp1);
+            if (sign_p[1]==-1)
+                   mpf_sub_ui(temp1,temp1,p[1]);
+            else
+                   mpf_add_ui(temp1,temp1,p[1]);
+            mpf_mul_ui(temp1,temp1,k);
+            mpf_mul_ui(temp2,point,q[1]);
+            if (sign_q[1]==-1)
+                   mpf_neg(temp2,temp2);
+            if (sign_q[0]==-1)
+                   mpf_sub_ui(temp2,temp2,q[0]);
+            else
+                   mpf_add_ui(temp2,temp2,q[0]);
+            mpf_add(temp1,temp1,temp2);
+            mpf_div_ui(temp1,temp1,(k+2));
+            mpf_neg(temp1,temp1);
+            mpf_mul(temp1,temp1,h);
+            mpf_mul(temp1,temp1,d[k+1]);
+            mpf_set_d(temp2,(k*(k-1)*p[2]*sign_p[2]+k*q[1]*sign_q[1]+r)*1.0/((k+2)*(k+1)));
+            mpf_mul(temp2,h,temp2);
+            mpf_mul(temp2,temp2,h);
+            mpf_mul(temp2,temp2,d[k]);
+            mpf_sub(d[k+2],temp1,temp2);
+            mpf_mul(temp1,point,point);
+            mpf_mul_ui(temp1,temp1,p[2]);
+            if (sign_p[2]==-1)
+                mpf_neg(temp1,temp1);
+            mpf_mul_ui(temp2,point,p[1]);
+            if (sign_p[1]==-1)
+                mpf_neg(temp2,temp2);
+            mpf_add(temp1,temp1,temp2);
+            if (sign_p[0]==-1)
+                mpf_sub_ui(temp1,temp1,p[0]);
+            else
+                mpf_add_ui(temp1,temp1,p[0]);
+            mpf_div(d[k+2],d[k+2],temp1);
     }
-    mpf_clear(temp);
+    mpf_clear(temp1);
+    mpf_clear(temp2);
 }
 
 void newton(mpf_t point,mpf_t value_at_prepoint,mpf_t h,mpf_t erro,long int index,long int m)
